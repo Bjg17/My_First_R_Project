@@ -1,0 +1,306 @@
+---
+title: "Bikes"
+author: "Banta Jabbi"
+date: "2024-10-30"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+---
+
+# BIKES PURCHASED R PROJECT
+
+This is the first ever project I have created using a programming language.
+
+The project is about finding trends and indications of what can cause a user to buy a bike.
+
+I started cleaning the data, and then I created individual charts, to visualize the data so that i could discover trends and finally I used a decision tree model, to predict if a user would buy a bike or not.
+
+## INSTALLING & LOADING PACKAGES AND DATA
+
+```{R}
+library(tidyverse)
+library(readxl)
+library(ggplot2)
+library(ggrepel)
+library(rpart)
+library(rpart.plot)
+library(rattle)
+```
+
+Loading the data and checking its content and types.
+
+```{r bikes}
+bikes_data <- read.csv("C:\\Users\\User\\Downloads\\bikes_1.csv")
+head(bikes_data)
+summary(bikes_data)
+```
+
+Counting the amount of rows/records in the original dataset.
+
+```{r}
+count(bikes_data)
+```
+
+Counting the unique values.
+
+```{r}
+count(bikes_data %>% distinct())
+```
+
+## CLEANING THE DATA
+
+Creating a new column with the help of the case_when function.
+
+```{r}
+bikes_data <- bikes_data %>%
+  distinct() %>%
+  mutate(Age_Category = case_when(
+    Age <= 35 ~ "Young",
+    Age >35 & Age <= 50 ~ "Middle Age",
+    Age > 50 ~ "Old"))
+```
+
+Dropping the age column
+
+```{r}
+bikes_data <- bikes_data %>%
+  select(!Age)
+```
+
+Updating columns.
+
+```{r}
+bikes_data <- bikes_data%>%
+  mutate(Commute.Distance = replace( Commute.Distance,Commute.Distance == "10+ Miles","More than 10 Miles"))%>%
+  mutate(Marital_Status = replace(Marital_Status, Marital_Status == "S", "Single"))%>%
+  mutate(Marital_Status = replace(Marital_Status, Marital_Status == "M", "Married"))%>%
+  mutate(Gender = replace(Gender, Gender == "M", "Male"))%>%
+  mutate(Gender = replace(Gender, Gender == "F", "Female"))
+```
+
+```{r}
+bikes_data
+```
+
+## VISUALISING THE DATA
+
+Using ggplot, to create a bar chart to discover who is more inclined to buy bikes: single or married.
+
+```{r}
+marital_status <- bikes_data%>%
+  select(Marital_Status, Purchased_Bike)%>%
+  group_by(Marital_Status, Purchased_Bike)%>%
+  summarise(n = n(), .groups = "drop")
+marital_status
+
+ggplot(marital_status, aes(x = Marital_Status, y = n, label = n, fill = Purchased_Bike))+
+  geom_bar(stat = "identity", position = position_dodge(.7), width = .5)+
+  #geom_text()+
+  geom_label(position = position_dodge2(width = .7))+
+  labs(title = "Married vs Single", 
+       subtitle = "This chart shows who is more inclined to buy and not buy a  bike",
+       y = "Count")
+```
+
+Using ggplot, to create a bar chart to discover who is more inclined to buy bikes: men or women.
+
+```{r}
+genders <- bikes_data%>% 
+  select(Gender, Purchased_Bike)%>%
+  group_by(Gender, Purchased_Bike)%>% 
+  summarise(n = n(), .groups = "drop")
+
+genders
+
+ggplot(genders, aes(x = Gender, y = n, label = n, fill = Purchased_Bike))+ 
+  geom_bar(stat = "identity", position = position_dodge(.7), width = .5)+ 
+  geom_label(position = position_dodge2(width = .7))+ 
+  labs(title = "Males vs Females", subtitle = "This chart shows who is more inclined to buy and not buyi  bike", y = "Count")
+```
+
+Using ggplot, to create a bar chart to discover who is more inclined to buy bikes: men(between Single and Married) or women(Single and Married).
+
+```{r}
+gender_maritalStatus <- bikes_data%>%
+  select(Gender, Marital_Status, Purchased_Bike)%>%
+  group_by(Gender, Marital_Status, Purchased_Bike)%>%
+  summarise(count = n(), .groups = "drop")
+
+ggplot(gender_maritalStatus, aes(x = Marital_Status, y = count, fill = Purchased_Bike, label = count))+
+  geom_bar(stat = "identity", position = position_dodge(width = .7), width = .5)+
+  geom_label(position = position_dodge(width = .7))+
+  facet_wrap(~Gender)+
+  labs(title = "Males vs Females", caption = "2 facets females and Males, inside of each facet it shows single and married people", x = "" ,y = "Count")
+```
+
+Using ggplot, create a bar chart to show the total number of participants, in each occupation category.
+
+```{r}
+total_participants_Categories <- bikes_data%>%
+  select(Occupation)%>%
+  group_by(Occupation)%>%
+  summarise(total = n(), .groups = "drop")
+
+ggplot(total_participants_Categories, aes(x = Occupation, y = total, label = total, fill = Occupation))+
+  geom_bar(stat = "identity")+
+  geom_label()+
+  labs(title = "Categories", subtitle = "Total number of customers in each category", y = "Count")
+```
+
+Using ggplot, create a bar chart to discover the occupations with more than 10 miles of commute distance, as this suggest people with more than 10 miles of distance are less willing to buy a bike.
+
+```{r}
+profession <- bikes_data %>%
+  group_by(Occupation, Commute.Distance, Purchased_Bike)%>%
+  summarise(n = n(), .groups = "drop")%>%
+  filter(Commute.Distance == "More than 10 Miles")
+
+ggplot(profession, aes(x = Occupation, y = n, label = n, fill = Purchased_Bike))+
+  geom_bar(stat = "identity")+
+  geom_text()+
+  labs(title = "Occupations with more than 10 miles", y = "Count")+
+  geom_label()
+```
+
+Using ggplot, create a line chart to discover purchases, based on commute distance.
+
+```{r}
+bikes_data%>%
+  select(Commute.Distance, Purchased_Bike)%>%
+  group_by(Commute.Distance, Purchased_Bike)%>%
+  summarise(count = n(), .groups = "drop")%>%
+  ggplot(aes(x = Commute.Distance, y = count, color = Purchased_Bike, label = count ))+
+  geom_line(linetype = "solid", color = "black")+
+  geom_label()+
+  labs(title = "Line Graph Showing Purchases Based on Commute Distance")
+```
+
+The outcome of this chart demonstrates only 0.07% of users with a commute distance of more than 10 miles, decided to buy a bike. The chart above,line 162 shows only 33 people bought a bike. The chart below indicates that 485 bikes have been bought. 33 / 485 = 0.068%
+
+```{r}
+profession_buying_bikes <- bikes_data%>%
+  select(Occupation, Purchased_Bike)%>%
+  group_by(Occupation, Purchased_Bike)%>%
+  summarise(count = n(), .groups = "drop")
+
+ggplot(profession_buying_bikes, aes(x = Occupation, y = count, fill = Purchased_Bike, label = count))+
+  geom_bar(stat = "identity", position = position_dodge(0.5), width = 0.3)+
+ ## geom_text_repel(color = "#FFFFFF")+
+  geom_label(position = position_dodge(0.5))+
+  labs(title = "Profession", y = "Count")
+```
+
+using ggplot, to find trends about the education and purchases.
+
+```{r}
+education_buying_bikes <- bikes_data%>%
+  select(Education, Purchased_Bike)%>%
+  group_by(Education, Purchased_Bike)%>%
+  summarise(count = n(), .groups = "drop")
+
+ggplot(education_buying_bikes, aes(x = Education, y = count, fill = Purchased_Bike, label = count))+
+  geom_bar(stat = "identity", position = position_dodge(0.5), width = 0.3)+
+  geom_label(position = position_dodge(0.5))+
+  labs(title = "Education", y = "Count")
+```
+
+using ggplot, to find trends about the region and purchases.
+
+```{r}
+region_buying_bikes <- bikes_data%>%
+  select(Region, Purchased_Bike)%>%
+  group_by(Region, Purchased_Bike)%>%
+  summarise(count = n(), .groups = "drop")
+
+ggplot(region_buying_bikes, aes(x = Region, y = count, fill = Purchased_Bike, label = count))+
+  geom_bar(stat = "identity", position = position_dodge(0.5), width = 0.3)+
+  geom_label(position = position_dodge(0.5))+
+  labs(title = "Region", y = "Count")
+```
+
+using ggplot, to find trends about the Age Categories and purchases.
+
+```{r}
+agesVSbuying <-  bikes_data%>%
+  select(Age_Category, Purchased_Bike)%>%
+  group_by(Age_Category, Purchased_Bike)%>%
+  summarise(count = n(), .groups = "drop")
+
+ggplot(agesVSbuying, aes(x = Age_Category, y = count, fill = Purchased_Bike, label = count))+
+  geom_point(stat = "identity", position = position_dodge(0.5))+
+  ## geom_text_repel(color = "#FFFFFF")+
+  #geom_label(position = position_dodge(0.5))
+  geom_label()+
+  labs(title = "Age Categories", y = "Count")
+```
+
+## CREATING A DECISON TREEMODEL
+
+Creating a sample
+
+```{r}
+set.seed(1)
+
+sample <- sample(c(TRUE, FALSE), nrow(bikes_data), replace = TRUE, prob = c(0.7, 0.3))
+train <- bikes_data[sample, ]
+test <- bikes_data[!sample, ]
+```
+
+Creating the decision tree
+
+```{r}
+bikes_tree <- rpart(formula = Purchased_Bike ~ Gender + Marital_Status + Income + Children + 
+                      Home_Owner + Cars + Education + Occupation + Commute.Distance +
+                      Region + Age_Category,
+                    cp = 0.01,
+                    maxdepth = 5,
+                    data = train, 
+                    method = "class")
+```
+
+Using the cp functions
+
+```{r}
+plotcp(bikes_tree)
+printcp(bikes_tree)
+```
+
+Checking misclassification error.
+
+```{r}
+sum(predict(bikes_tree, type = "class")!=train$Purchased_Bike) / nrow(train)
+```
+
+Visualize decision tree
+
+```{r}
+fancyRpartPlot(bikes_tree)
+```
+
+predicting and binding the column to the bikes_tree dataset.
+
+```{r}
+predicted_purchase <- predict(bikes_tree, type = "class")
+bind_tables <- cbind(train, predicted_purchase)
+```
+
+```{r}
+bind_tables
+```
+
+Testing the model with new data
+
+```{r}
+new_input <- predict(object = bikes_tree, 
+                     newdata = data.frame(
+                       Gender = "Male", Marital_Status = "Married", Income = "$30,000.00", Children = 2,
+                       Home_Owner = "No", Cars = 1, Education = "Bachelors", 
+                       Occupation = "Professional", Commute.Distance = "0-1 Miles",
+                       Region = "North America", Age_Category = "Middle Age"),
+                     type = "class")
+```
+
+```{r}
+new_input
+```
